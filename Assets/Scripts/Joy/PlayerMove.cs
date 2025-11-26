@@ -1,151 +1,181 @@
+// using System;
+// using System.Collections;
+// using System.Collections.Generic;
+// using UnityEngine;
+//
+// public class PlayMove : MonoBehaviour
+// {
+//     public float playerSpeed = 1.9f;
+//
+//     public CharacterController cC;
+//
+//     public float gravity = -9.8f;
+//
+//     public Animator animator;
+//
+//     public float tunCalmTime = 0.5f;
+//
+//     public Transform playerCamera;
+//
+//     private float turnCalmVelocity;
+//
+//     Vector3 velocity;
+//     public Transform surfaceCheck;
+//     bool onSurface;
+//     public float surfaceDistance = 0.4f; //脚底检测半径
+//     public LayerMask surfaceMask;
+//
+//
+//     private void Update()
+//     {
+//         onSurface = Physics.CheckSphere(surfaceCheck.position, surfaceDistance, surfaceMask);
+//         // 将角色保持一个轻微向下的力
+//         if (onSurface && velocity.y < 0)
+//             // if (velocity.y < 0)
+//         {
+//             velocity.y = -2f;
+//         }
+//
+//         // 每一帧给角色加上重力的加速度  实现自然下落效果
+//         velocity.y += gravity * Time.deltaTime;
+//         // 根据速度，移动角色
+//         // cC.Move(velocity * Time.deltaTime);
+//
+//
+//         PlayerMove();
+//     }
+//
+//     private void PlayerMove()
+//     {
+//         float horizontal_axis = Input.GetAxisRaw("Horizontal");
+//         float vertical_axis = Input.GetAxisRaw("Vertical");
+//         //长度归一化
+//         Vector3 direction = new Vector3(horizontal_axis, 0, vertical_axis).normalized;
+//         // 判断移动的距离
+//         if (direction.magnitude >= 0.1f)
+//         {
+//             // 获取旋转角度   Mathf.Atan2 返回的是弧度   Mathf.Rad2Deg弧度转成 角度  Mathf.Rad2Deg固定的57  1弧度=57角度
+//             float targetAngle = Mathf.Atan2(direction.x, direction.z) * Mathf.Rad2Deg + playerCamera.eulerAngles.y;
+//             // 平滑速度
+//             float angle =
+//                 Mathf.SmoothDampAngle(
+//                     transform.eulerAngles.y, //当前角度
+//                     targetAngle, //目标角度
+//                     ref turnCalmVelocity, //当前旋转速度
+//                     tunCalmTime //平滑时间
+//                 );
+//             Vector3 moveDirection = Quaternion.Euler(0f, targetAngle, 0f) * Vector3.forward;
+//             // 旋转
+//             transform.rotation = Quaternion.Euler(0, angle, 0);
+//             //Move是每帧移动多少距离   moveDirection玩家移动方向
+//             cC.Move(moveDirection * (playerSpeed * Time.deltaTime));
+//
+//             // 设置动画
+//             animator.SetBool("walk", true);
+//         }
+//         else
+//         {
+//             animator.SetBool("walk", false);
+//         }
+//     }
+// }
+
 using UnityEngine;
-using Cinemachine;
 
-public class PlayerMove : MonoBehaviour
+public class PlayMove : MonoBehaviour
 {
-    [Header("Player Settings")]
-    public GameObject player;
-    public Rigidbody playerRB;
-    public float moveSpeed = 5f;
+    public float playerSpeed = 1.9f;
+    public CharacterController cC;
 
-    [Header("Input")]
-    public Joystick joystick; // 左摇杆
-    public float lookSpeed = 0.2f; // 右滑灵敏度
+    public float gravity = -9.8f;
+    Vector3 velocity;
 
-    [Header("Animation")]
     public Animator animator;
+    public float tunCalmTime = 0.5f;
+    private float turnCalmVelocity;
 
-    [Header("Camera")]
-    public CinemachineVirtualCamera virtualCam;
-    public Transform cameraPivot; // 用于旋转摄像机的空物体
+    public Transform playerCamera;
+    public float cameraSensitivity = 120f; // 鼠标旋转速度
+    private float cameraYaw = 0f;
+    private float cameraPitch = 20f; // 初始俯角
+    public float minPitch = -30f;
+    public float maxPitch = 60f;
 
-    private Vector3 moveDir;
+    public Transform surfaceCheck;
+    public float surfaceDistance = 0.4f;
+    public LayerMask surfaceMask;
+    bool onSurface;
 
-    private float yaw = 0f;
-    private float pitch = 10f;
-
-    private Quaternion defaultPivotRotation; // 默认角度
-
-    private void Start()
+    void Update()
     {
-        if (cameraPivot != null)
-            defaultPivotRotation = cameraPivot.localRotation;
+        // --- 检测地面 ---
+        onSurface = Physics.CheckSphere(surfaceCheck.position, surfaceDistance, surfaceMask);
+        if (onSurface && velocity.y < 0)
+            velocity.y = -2f;
+
+        // --- 重力 ---
+        velocity.y += gravity * Time.deltaTime;
+
+        // --- 相机控制 ---
+        HandleCamera();
+
+        // --- 玩家移动 ---
+        PlayerMove();
     }
 
-    private void Update()
+    private void HandleCamera()
     {
-        HandleMovementInput();
-        HandleCameraRotation();
-    }
+        // 摄像机位置跟随角色
+        playerCamera.position = transform.position;
 
-    private void FixedUpdate()
-    {
-        HandleMovement();
-    }
-
-    // ================== 移动输入 ==================
-    private void HandleMovementInput()
-    {
-        float horizontal = 0f;
-        float vertical = 0f;
-
-        // 优先使用摇杆
-        if (joystick != null && (Mathf.Abs(joystick.Horizontal) > 0.1f || Mathf.Abs(joystick.Vertical) > 0.1f))
+        // 右键按住旋转视角
+        if (Input.GetMouseButton(1))
         {
-            horizontal = joystick.Horizontal;
-            vertical = joystick.Vertical;
+            float mouseX = Input.GetAxis("Mouse X") * cameraSensitivity * Time.deltaTime;
+            float mouseY = Input.GetAxis("Mouse Y") * cameraSensitivity * Time.deltaTime;
+
+            cameraYaw += mouseX;
+            cameraPitch -= mouseY;
+            cameraPitch = Mathf.Clamp(cameraPitch, minPitch, maxPitch);
+        }
+
+        // 更新摄像机旋转
+        playerCamera.rotation = Quaternion.Euler(cameraPitch, cameraYaw, 0f);
+    }
+
+    private void PlayerMove()
+    {
+        float horizontal = Input.GetAxisRaw("Horizontal");
+        float vertical = Input.GetAxisRaw("Vertical");
+
+        Vector3 direction = new Vector3(horizontal, 0, vertical).normalized;
+
+        if (direction.magnitude >= 0.1f)
+        {
+            // 角色旋转（根据摄像机方向 + 移动方向）
+            float targetAngle = Mathf.Atan2(direction.x, direction.z) * Mathf.Rad2Deg
+                                + playerCamera.eulerAngles.y;
+
+            float angle = Mathf.SmoothDampAngle(
+                transform.eulerAngles.y,
+                targetAngle,
+                ref turnCalmVelocity,
+                tunCalmTime
+            );
+
+            transform.rotation = Quaternion.Euler(0, angle, 0);
+
+            Vector3 moveDir = Quaternion.Euler(0, targetAngle, 0) * Vector3.forward;
+            cC.Move(moveDir * (playerSpeed * Time.deltaTime));
+
+            animator.SetBool("walk", true);
         }
         else
         {
-            horizontal = Input.GetAxisRaw("Horizontal");
-            vertical = Input.GetAxisRaw("Vertical");
+            animator.SetBool("walk", false);
         }
 
-        moveDir = new Vector3(horizontal, 0f, vertical).normalized;
-        animator.SetBool("walk", moveDir.magnitude > 0.1f);
-    }
-
-    // ================== 移动玩家 ==================
-    private void HandleMovement()
-    {
-        if (moveDir.magnitude > 0.01f)
-        {
-            // 使用世界轴方向移动
-            Vector3 move = Vector3.zero;
-
-            if (joystick != null && moveDir.magnitude > 0.1f)
-            {
-                // 摇杆移动
-                move = new Vector3(moveDir.x, 0f, moveDir.z);
-            }
-            else
-            {
-                // 键盘移动
-                if (Input.GetKey(KeyCode.W)) move = Vector3.forward;
-                else if (Input.GetKey(KeyCode.S)) move = Vector3.back;
-                else if (Input.GetKey(KeyCode.A)) move = Vector3.left;
-                else if (Input.GetKey(KeyCode.D)) move = Vector3.right;
-            }
-
-            move.Normalize();
-            playerRB.MovePosition(playerRB.position + move * moveSpeed * Time.fixedDeltaTime);
-
-            if (move.magnitude > 0.01f)
-                player.transform.forward = move; // 角色朝向移动方向
-        }
-    }
-
-    // ================== 右滑旋转摄像机 ==================
-    private void HandleCameraRotation()
-    {
-        bool isTouching = false;
-
-        // 手机触摸
-        if (Input.touchCount == 1)
-        {
-            Touch touch = Input.GetTouch(0);
-
-            if (touch.position.x > Screen.width / 2)
-            {
-                isTouching = true;
-
-                if (touch.phase == TouchPhase.Moved)
-                {
-                    yaw += touch.deltaPosition.x * lookSpeed * Time.deltaTime;
-                    pitch -= touch.deltaPosition.y * lookSpeed * Time.deltaTime;
-                    pitch = Mathf.Clamp(pitch, -20f, 60f);
-
-                    if (cameraPivot != null)
-                        cameraPivot.localRotation = Quaternion.Euler(pitch, yaw, 0f);
-                }
-            }
-        }
-
-#if UNITY_EDITOR
-        // PC右键旋转
-        if (Input.GetMouseButton(1))
-        {
-            isTouching = true;
-
-            float mouseX = Input.GetAxis("Mouse X");
-            float mouseY = Input.GetAxis("Mouse Y");
-
-            yaw += mouseX * lookSpeed * 10f;
-            pitch -= mouseY * lookSpeed * 10f;
-            pitch = Mathf.Clamp(pitch, -20f, 60f);
-
-            if (cameraPivot != null)
-                cameraPivot.localRotation = Quaternion.Euler(pitch, yaw, 0f);
-        }
-#endif
-
-        // 松手后回到默认角度
-        if (!isTouching && cameraPivot != null)
-        {
-            cameraPivot.localRotation = Quaternion.Slerp(cameraPivot.localRotation, defaultPivotRotation, Time.deltaTime * 5f);
-            // 同时重置 yaw 和 pitch
-            yaw = cameraPivot.localEulerAngles.y;
-            pitch = cameraPivot.localEulerAngles.x;
-        }
+        // 应用重力
+        cC.Move(velocity * Time.deltaTime);
     }
 }
