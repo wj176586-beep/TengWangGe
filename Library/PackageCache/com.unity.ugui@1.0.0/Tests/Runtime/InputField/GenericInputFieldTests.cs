@@ -103,7 +103,6 @@ namespace InputfieldTests
         }
 
         [UnityTest]
-        [UnityPlatform(exclude = new[] { RuntimePlatform.Switch })] // Currently InputField.ActivateInputFieldInternal calls Switch SoftwareKeyboard screen ; without user input or a command to close the SoftwareKeyboard this blocks the tests suite
         public IEnumerator FocusesOnSelect()
         {
             InputField inputField = m_PrefabRoot.GetComponentInChildren<InputField>();
@@ -195,7 +194,7 @@ namespace InputfieldTests
             inputField.contentType = InputField.ContentType.IntegerNumber;
             Assert.AreEqual(InputField.LineType.SingleLine, inputField.lineType);
             Assert.AreEqual(InputField.InputType.Standard, inputField.inputType);
-            Assert.AreEqual(TouchScreenKeyboardType.NumbersAndPunctuation, inputField.keyboardType);
+            Assert.AreEqual(TouchScreenKeyboardType.NumberPad, inputField.keyboardType);
             Assert.AreEqual(InputField.CharacterValidation.Integer, inputField.characterValidation);
 
             inputField.contentType = InputField.ContentType.DecimalNumber;
