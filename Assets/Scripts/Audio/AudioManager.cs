@@ -4,59 +4,73 @@ using System.IO;
 using UnityEngine;
 using UnityEngine.Networking;
 
-public class AudioManager : SingletonAutoMono<AudioManager>
+public static class AudioManager
 {
-    
-    public void LoadAudio(string fileName, Action<AudioClip> callback)
+    /// <summary>
+    /// 异步安全加载本地音频
+    /// </summary>
+    /// <param name="runner">用于启动协程的 MonoBehaviour</param>
+    /// <param name="fileName">文件名，例如 "bgm.mp3"</param>
+    /// <param name="callback">回调返回 AudioClip，失败或文件不存在返回 null</param>
+    public static void LoadAudio(MonoBehaviour runner, string fileName, Action<AudioClip> callback)
     {
-        StartCoroutine(LoadAudioReally(fileName, callback));
+        runner.StartCoroutine(LoadAudioCoroutine(fileName, callback));
     }
 
-    // 异步加载本地音频文件并返回 AudioClip
-    private IEnumerator LoadAudioReally(string fileName, Action<AudioClip> callback)
+    private static IEnumerator LoadAudioCoroutine(string path, Action<AudioClip> callback)
     {
-        string folder = Path.Combine(Application.persistentDataPath, "Audio");
-
-        string filePath = Path.Combine(folder, fileName); // 例如传入 "bgm.mp3"
-
-        if (!File.Exists(filePath))
+        
+        // 文件不存在，安全返回 null
+        if (!File.Exists(path))
         {
-            Debug.LogError("音频文件不存在: " + filePath);
+            Debug.LogWarning($"[AudioManager] 音频文件不存在: {path}");
             callback?.Invoke(null);
             yield break;
         }
 
-        // 注意本地文件需要加前缀 file://
-        string url = "file://" + filePath;
+        string url = "file://" + path;
+        AudioType type = GetAudioType(path);
 
-        // 根据后缀确定音频类型
-        AudioType type = GetAudioType(filePath);
-
-        UnityWebRequest request = UnityWebRequestMultimedia.GetAudioClip(url, type);
-
-        yield return request.SendWebRequest();
-
-        if (request.result != UnityWebRequest.Result.Success)
+        if (type == AudioType.UNKNOWN)
         {
-            Debug.LogError("加载音频失败: " + request.error);
+            Debug.LogWarning($"[AudioManager] 不支持的音频格式: {path}");
             callback?.Invoke(null);
             yield break;
         }
 
-        AudioClip clip = DownloadHandlerAudioClip.GetContent(request);
-        callback?.Invoke(clip);
+        using (UnityWebRequest request = UnityWebRequestMultimedia.GetAudioClip(url, type))
+        {
+            yield return request.SendWebRequest();
+
+            // 请求失败，安全返回 null
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogWarning($"[AudioManager] 加载音频失败: {request.error}");
+                callback?.Invoke(null);
+                yield break;
+            }
+
+            AudioClip clip = DownloadHandlerAudioClip.GetContent(request);
+
+            // 再次安全检查
+            if (clip == null)
+            {
+                Debug.LogWarning($"[AudioManager] 音频加载失败: {path}");
+            }
+
+            callback?.Invoke(clip);
+        }
     }
 
-    // 根据文件后缀返回音频类型
-    private AudioType GetAudioType(string path)
+    private static AudioType GetAudioType(string path)
     {
         string ext = Path.GetExtension(path).ToLower();
-        switch (ext)
+        return ext switch
         {
-            case ".wav": return AudioType.WAV;
-            case ".mp3": return AudioType.MPEG;
-            case ".ogg": return AudioType.OGGVORBIS;
-            default: return AudioType.UNKNOWN;
-        }
+            ".wav" => AudioType.WAV,
+            ".mp3" => AudioType.MPEG,
+            ".ogg" => AudioType.OGGVORBIS,
+            _ => AudioType.UNKNOWN
+        };
     }
 }

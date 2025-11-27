@@ -14,6 +14,8 @@ public class MyTest : MonoBehaviour
     {
         StartCoroutine(LoadAudio("发如雪-周杰伦.mp3", (clip) =>
         {
+            
+            
             audiosource.clip = clip;
             audiosource.Play();
             
